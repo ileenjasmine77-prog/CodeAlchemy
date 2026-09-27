@@ -1,0 +1,55 @@
+╭────────────────────────── New incident just paged ───────────────────────────╮
+│ Checkout API is returning 502s under normal load, p99 latency at 5.8s.       │
+│ Grafana shows DB connection pool near 100% utilization. Started 6 minutes    │
+│ ago, no recent deploy that we can see.                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────── Mode ─────────────────────╮
+│ OFFLINE demo mode (no Hindsight/Groq keys set) │
+╰────────────────────────────────────────────────╯
+╭────────────────────────── 1) Agent WITHOUT memory ───────────────────────────╮
+│ I don't have any prior context on this. Suggest starting with standard       │
+│ triage: check recent deploys, error rate by endpoint, and dependency health. │
+│ (offline demo response — connect GROQ_API_KEY for real reasoning)            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────── Memories recalled from Hindsight ──────────────────────╮
+│ [INC-063] 2026-09-20 — checkout-service                                      │
+│ Symptoms: Checkout API returning 502s under moderate load, DB connection     │
+│ dashboard showing pool near capacity again                                   │
+│ Root cause: A new microservice (loyalty-points) was added upstream of        │
+│ checkout and wasn't given its own connection pool, competing for the same    │
+│ shared pool                                                                  │
+│ Fix: Gave loyalty-points its own dedicated connection pool instead of        │
+│ sharing checkout's                                                           │
+│ Runbook: RB-DB-CONN-POOL                                                     │
+│                                                                              │
+│ [INC-014] 2026-08-03 — checkout-service                                      │
+│ Symptoms: Checkout API p99 latency spiked from 180ms to 6.2s, 502s from the  │
+│ LB, error rate 14%                                                           │
+│ Root cause: Connection pool exhaustion after a config deploy dropped         │
+│ max_connections from 200 to 20                                               │
+│ Fix: Rolled back the connection-pool config change (deploy #4471); latency   │
+│ recovered within 3 minutes                                                   │
+│ Runbook: RB-DB-CONN-POOL                                                     │
+│                                                                              │
+│ [INC-021] 2026-09-11 — checkout-service                                      │
+│ Symptoms: Checkout API 502s and rising latency during a traffic spike, DB    │
+│ connections maxed out in dashboard                                           │
+│ Root cause: Same connection-pool exhaustion pattern as INC-014, this time    │
+│ triggered by a Black Friday-style traffic surge rather than a bad deploy     │
+│ Fix: Manually bumped max_connections to 300 and enabled connection pooling   │
+│ via PgBouncer                                                                │
+│ Runbook: RB-DB-CONN-POOL                                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────── 2) Agent WITH memory ────────────────────────────╮
+│ This matches a pattern I've seen before. Based on the retained incident(s)   │
+│ above, start with the fix that worked last time — it targets the same root   │
+│ cause these symptoms point to. (offline demo response — connect GROQ_API_KEY │
+│ for real reasoning)                                                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────── Why this matters ──────────────────────────────╮
+│ Without memory, the agent gives generic triage steps a junior engineer       │
+│ already knows. With memory, it recognizes the exact failure pattern          │
+│ (checkout-service connection-pool exhaustion), cites the incident IDs where  │
+│ it happened before, and points straight at the fix that worked — cutting the │
+│ first 10-15 minutes of an incident down to seconds.                          │
+╰──────────────────────────────────────────────────────────────────────────────╯

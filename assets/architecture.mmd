@@ -1,0 +1,12 @@
+flowchart LR
+    A[New incident paged] --> B[IncidentResponseAgent.triage]
+    B -->|recall query| C[(Hindsight bank\nincident-response)]
+    C -->|top 3 similar past incidents| B
+    B -->|system prompt + recalled memories| D[Groq LLM\nopenai/gpt-oss-120b]
+    D -->|cited, specific recommendation| E[On-call engineer]
+
+    F[Incident resolved] --> G[IncidentResponseAgent.close_incident]
+    G -->|retain structured write-up| C
+
+    style C fill:#4c3fa8,color:#fff
+    style D fill:#1f6feb,color:#fff
