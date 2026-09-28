@@ -1,196 +1,148 @@
-# Incident Response Agent — built on Hindsight
+# Aegis — A Memory-Powered Account Takeover (ATO) Detection Agent
 
-This project is an incident-response agent that learns from the incidents the team has already solved. It stores what happened, why it happened, what fixed it, and which runbook was used in Hindsight; then it recalls the closest prior examples when a new outage appears.
+Built for **HackWithHyderabad 3.0** — "AI Agents That Learn Using Hindsight"
 
-The value of the system is not just “an LLM answering a question.” The system gets more useful as more incidents are retained and recalled over time.
+## The Problem
 
-## Problem
+SOC (Security Operations Center) analysts triage account-takeover alerts (weird logins,
+impossible travel, brute-force attempts, MFA-bypass attempts) with **no memory of past
+incidents**. Every alert is investigated from scratch, even when the exact same attacker
+pattern, IP range, or behavior signature has shown up before. This wastes analyst time and
+lets confirmed-bad patterns slip through as "unknown / needs investigation" every single time.
 
-A stateless incident bot gives the same generic advice every time: check recent deploys, look at error rates, inspect the database. That is not enough when the team has already solved the same class of problem multiple times.
+## The Solution
 
-Operators need an assistant that can say:
+**Aegis** is a triage agent that sits in front of raw login-anomaly alerts. For every new
+alert it:
 
-- this looks like the same pattern we saw on checkout-service last month
-- the last fix was to roll back the pool config
-- the relevant precedent is INC-014 and INC-021
-- the runbook to follow is RB-DB-CONN-POOL
+1. **Recalls** similar past incidents from Hindsight (same IP/ASN, same behavior signature,
+   same targeted user or department, same attacker TTP).
+2. **Reasons** over the alert + recalled memories with an LLM to produce a verdict
+   (`malicious` / `benign` / `needs_review`), a confidence score, and a recommended
+   containment action.
+3. **Learns** from analyst feedback — every resolved incident (confirmed breach, false
+   positive, or corrected verdict) is written back into Hindsight, so the next similar alert
+   is triaged faster and more accurately.
 
-## Why Hindsight is central
-
-Hindsight is the core of the product, not a side feature. The application becomes more valuable as incident history accumulates because the same operational patterns are remembered and retrieved automatically.
-
-The memory flow is explicit:
-
-1. Retain: save a resolved incident and its fix to the bank
-2. Recall: search the bank for the closest historical precedents
-3. Reflect: look for recurring patterns across retained incidents
-4. Respond: use the recalled evidence to produce a better incident recommendation
-
-Without Hindsight, the agent would give a generic checklist. With Hindsight, it can reason from previous failure modes and successful remediations.
-
-## What the agent remembers
-
-For every resolved incident, the agent stores:
-
-- service
-- date
-- symptoms
-- root cause
-- fix that worked
-- runbook used
-- operational context and recurring pattern hints
-
-This is stored in the same Hindsight bank used for future recall and pattern analysis.
-
-## How the demo tells the story
-
-The project is built around a before/after incident-triage story:
-
-- Scene 1: without memory, the assistant provides generic guidance
-- Scene 2: past incidents are retained
-- Scene 3: a new incident arrives with similar symptoms
-- Scene 4: relevant historical incidents are recalled
-- Scene 5: recurring patterns are surfaced
-- Scene 6: the improved recommendation uses precedent and evidence
-- Scene 7: the new incident is resolved and retained, increasing future knowledge
-
-## Learning over time
-
-The demo intentionally shows a learning journey:
-
-- Incident #1 establishes an initial pattern
-- Incident #5 shows the same service recurs
-- Pattern analysis identifies the recurring failure mode
-- A later incident uses the accumulated evidence to guide a stronger recommendation
-
-This is visible in the project’s learning timeline and in the increased specificity of recall results over time.
+The demo shows the agent going from generic guesses on early alerts to confident,
+cited, "we've seen this exact attacker before" triage by the 10th–20th alert.
 
 ## Architecture
 
-```text
-User / Operator
-    ↓
-Incident Input (service, symptoms, severity, logs)
-    ↓
-IncidentResponseAgent
-    ├── Recall from Hindsight
-    ├── Compare to historical incidents
-    ├── Reflect / identify recurring patterns
-    ├── Call Groq for recommendation synthesis
-    └── Retain resolved incident back into Hindsight
+```mermaid
+flowchart LR
+    A[Synthetic Alert Generator] -->|new alert| B[Detection Rules<br/>app logic, not memory]
+    B --> C[Hindsight: recall]
+    C --> D[Hindsight: reflect]
+    D --> E[LLM Reasoning Agent<br/>Groq]
+    E --> F[Triage Verdict<br/>+ confidence + action]
+    F --> G[Analyst Dashboard]
+    G -->|confirm / correct| H[Hindsight: retain]
+    H -.feeds future recalls.-> C
 ```
 
-Key files:
+**What lives in Hindsight (the memory layer):**
+- Every resolved incident: alert signature, IP/geo, targeted user, verdict, action taken,
+  outcome, analyst notes.
+- Analyst corrections ("this was actually a false positive, user was traveling") — so the
+  agent stops over-flagging that pattern.
 
-- app/agent.py — retain / recall / reflect / respond workflow
-- app/hindsight_client.py — Hindsight API wrapper with offline fallback
-- app/llm_client.py — Groq chat client with fallback logic
-- app/data/synthetic_incidents.py — realistic recurring incident data and learning timeline helpers
-- demo.py — live demo and before/after incident story
-- scripts/seed_memory.py — stores example incidents in Hindsight
+**What is plain app logic (not memory):**
+- The heuristic rules that flag a raw login event as worth investigating in the first place
+  (impossible travel, new device + odd hour, brute force, credential stuffing).
+- The dashboard / API / LLM prompt orchestration.
+- The "live" alert currently being triaged, before it's resolved and written to memory.
 
-## How retain and recall work
+## Tech Stack
 
-### Retain
+- **Memory**: [Hindsight](https://hindsight.vectorize.io/) (`hindsight-client`)
+- **LLM**: Groq (`openai/gpt-oss-120b`, free tier) — swap via `.env`
+- **Backend**: FastAPI (Python)
+- **Frontend**: Single-page vanilla JS dashboard (no build step)
 
-When an incident is marked resolved, the agent calls close_incident() and stores a structured incident summary in Hindsight. The summary includes the service, symptoms, root cause, fix, and runbook.
+## Setup
 
-### Recall
+### 1. Run Hindsight (pick one)
 
-Before generating a response, the agent queries Hindsight for similar past incidents. The returned memory items are inserted into the Groq prompt as precedent and evidence.
+**Option A — Hindsight Cloud** (fastest):
+1. Sign up at https://ui.hindsight.vectorize.io
+2. Apply promo code `MEMHACK99` in Billing for $50 free credits
+3. Go to **Connect** → copy your API endpoint + API key
 
-### Reflect
+**Option B — Self-hosted (Docker)**:
+```bash
+export OPENAI_API_KEY=sk-xxx
+docker run --rm -it --pull always -p 8888:8888 -p 9999:9999 \
+  -e HINDSIGHT_API_LLM_API_KEY=$OPENAI_API_KEY \
+  -v $HOME/.hindsight-docker:/home/hindsight/.pg0 \
+  ghcr.io/vectorize-io/hindsight:latest
+```
+API will be at `http://localhost:8888`.
 
-The agent can also ask the memory bank to summarize recurring patterns, such as a repeated checkout-service database pool exhaustion pattern.
+### 2. Get a Groq API key
 
-## Before / after example
+Free tier at https://groq.com — used for the reasoning/triage step.
 
-Without memory:
-
-> Check recent deploys, inspect error rates, look at dependency health, and start generic triage.
-
-With memory:
-
-> This matches the checkout-service pool-exhaustion pattern from INC-014 and INC-021. The same symptoms were solved by increasing max_connections and isolating shared connection pools. Use that runbook first.
-
-## Running the project
-
-### 1) Create a virtual environment
+### 3. Configure
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
+cd backend
+cp .env.example .env
+# edit .env with your HINDSIGHT_BASE_URL, HINDSIGHT_API_KEY (cloud only), GROQ_API_KEY
 ```
 
-### 2) Install dependencies
+### 4. Install & run
 
 ```bash
 pip install -r requirements.txt
+python main.py
 ```
 
-### 3) Configure your environment
+Backend runs at `http://localhost:8000`.
 
-Create a .env file based on the sample and fill in your keys:
+### 5. Open the dashboard
 
-```env
-HINDSIGHT_BASE_URL=https://api.hindsight.vectorize.io
-HINDSIGHT_API_KEY=your_hindsight_key
-GROQ_API_KEY=your_groq_key
-GROQ_MODEL=openai/gpt-oss-120b
-GROQ_FALLBACK_MODEL=qwen/qwen3-32b
-HINDSIGHT_BANK_ID=incident-response
-```
+Open `frontend/index.html` directly in your browser (it talks to `localhost:8000`).
 
-### 4) Seed the memory bank
+### 6. Seed history + run the demo
 
 ```bash
-python scripts/seed_memory.py
+# from backend/
+python synthetic_data.py --seed        # pre-loads 15 historical resolved incidents into Hindsight
 ```
 
-### 5) Run the demo
+Then in the dashboard, click **"Generate Next Alert"** repeatedly and watch the agent's
+confidence and citations grow as more alerts get resolved.
 
-```bash
-python demo.py
+## Demo Script (60 seconds)
+
+See [`demo_script.md`](./demo_script.md).
+
+## Judging Criteria Mapping
+
+| Criteria | How this project addresses it |
+|---|---|
+| Innovation (30%) | Security/SOC framing of "incident response" instead of the generic DevOps-outage interpretation; case-based reasoning over attacker patterns |
+| Use of Hindsight Memory (25%) | Every verdict is grounded in `recall()` + `reflect()`; every resolution writes back via `retain()`; memory is visibly cited in the UI, not hidden |
+| Technical Implementation (20%) | Clean separation of detection rules (app logic) vs. memory (Hindsight) vs. reasoning (LLM); handles function-calling / LLM errors gracefully |
+| User Experience (15%) | Single dashboard, one click to advance the demo, memory citations shown inline |
+| Real-world Impact (10%) | Directly maps to a real SOC pain point (alert fatigue, repeated investigation of known-bad patterns) |
+
+## Project Structure
+
 ```
-
-If no keys are present, the app falls back to a local offline demo path so the flow still executes. The live mode remains the primary experience when API credentials are set.
-
-## Tech stack
-
-- Memory: Hindsight
-- LLM: Groq
-- Language: Python
-- Data: realistic synthetic incidents for recurring service patterns
-
-## Why the system is better with memory
-
-The bot is not just retrieving text. It is learning from previous resolutions, identifying recurring problems, and weighting the recommendation according to historical precedent.
-
-That is the operational difference between a generic assistant and an incident-response system that accumulates institutional knowledge.
-
-## Honest limitations
-
-- The synthetic dataset is intentionally realistic but still demo-oriented
-- Memory quality depends on how incidents are retained
-- The project is a focused CLI demo rather than a full PagerDuty/Opsgenie workflow integration
-- Real production usage would add richer telemetry, automation, and workflow integration
-
-## Safety and correctness
-
-- The Hindsight integration remains central
-- Live mode remains supported
-- The fallback offline mode remains intact
-- API keys stay in .env and are not exposed in the project code or logs
-
-## Need for live demo screenshots
-
-For a judge demo, the most compelling screenshots are:
-
-1. Hindsight memory bank
-2. LIVE (Hindsight + Groq) mode
-3. Recalled historical incidents
-4. Agent WITHOUT memory
-5. Agent WITH memory
-6. The memory journey / learning timeline
-
-These visuals make the memory-driven value obvious in under one minute.
+soc-memory-agent/
+├── README.md
+├── demo_script.md
+├── backend/
+│   ├── main.py                 # FastAPI app + endpoints
+│   ├── config.py                # env/config loading
+│   ├── hindsight_wrapper.py     # retain / recall / reflect wrapper
+│   ├── llm_agent.py             # Groq reasoning agent
+│   ├── detection_rules.py       # heuristic alert-generation logic (app logic, not memory)
+│   ├── synthetic_data.py        # synthetic users/alerts + history seeding
+│   ├── requirements.txt
+│   └── .env.example
+└── frontend/
+    └── index.html                # dashboard (vanilla JS)
+```

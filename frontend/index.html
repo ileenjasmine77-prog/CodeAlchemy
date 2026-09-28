@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aegis — Memory-Powered Incident Response Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0F1C;
+    --surface:#11192B;
+    --surface-2:#161F35;
+    --border:#233054;
+    --text:#E7ECF7;
+    --muted:#8A98B8;
+    --malicious:#F1585F;
+    --malicious-bg:#2B1620;
+    --benign:#33C6A0;
+    --benign-bg:#122A26;
+    --review:#E3AC52;
+    --review-bg:#2A2214;
+    --memory:#7C93FF;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'IBM Plex Mono',monospace;}
+
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:20px 28px;
+    border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg, #0D1424, #0A0F1C);
+  }
+  .brand{display:flex; align-items:center; gap:12px;}
+  .brand .mark{
+    width:34px;height:34px;border-radius:8px;
+    background:conic-gradient(from 220deg, var(--memory), var(--benign), var(--memory));
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700; font-size:15px; color:#0A0F1C;
+  }
+  .brand h1{font-size:18px; margin:0; letter-spacing:0.2px;}
+  .brand p{margin:0; font-size:12.5px; color:var(--muted);}
+
+  .stats{display:flex; gap:28px;}
+  .stat{text-align:right;}
+  .stat .n{font-size:20px; font-weight:600;}
+  .stat .l{font-size:11.5px; color:var(--muted);}
+
+  main{
+    display:grid;
+    grid-template-columns:1.6fr 1fr;
+    gap:20px;
+    padding:24px 28px 40px;
+    max-width:1320px;
+    margin:0 auto;
+  }
+  @media (max-width:900px){ main{grid-template-columns:minmax(0,1fr);} main > div{min-width:0;} }
+
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:20px;
+  }
+  .card + .card{margin-top:16px;}
+
+  .cta-row{display:flex; gap:12px; margin-bottom:16px;}
+  button{
+    font-family:inherit;
+    font-size:14px;
+    font-weight:600;
+    border-radius:8px;
+    border:1px solid var(--border);
+    padding:11px 18px;
+    cursor:pointer;
+    transition:transform .08s ease, border-color .15s ease;
+  }
+  button:active{transform:scale(0.98);}
+  .btn-primary{
+    background:var(--memory);
+    border-color:var(--memory);
+    color:#0A0F1C;
+  }
+  .btn-primary:hover{border-color:#9AACFF;}
+  .btn-ghost{background:transparent; color:var(--text);}
+  .btn-ghost:hover{border-color:#3A4A78;}
+  .btn-malicious{background:var(--malicious-bg); color:var(--malicious); border-color:#4A2530;}
+  .btn-benign{background:var(--benign-bg); color:var(--benign); border-color:#1F4A40;}
+
+  .empty{
+    color:var(--muted);
+    font-size:14px;
+    padding:40px 10px;
+    text-align:center;
+    line-height:1.6;
+  }
+
+  .alert-head{display:flex; justify-content:space-between; align-items:flex-start; gap:16px;}
+  .alert-id{font-size:12px; color:var(--muted);}
+  .alert-desc{font-size:15.5px; line-height:1.5; margin:10px 0 14px;}
+  .alert-meta{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px;}
+  .chip{
+    font-size:12px;
+    padding:4px 10px;
+    border-radius:999px;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    color:var(--muted);
+  }
+
+  .badge{
+    font-size:12px;
+    font-weight:600;
+    padding:5px 12px;
+    border-radius:999px;
+    white-space:nowrap;
+  }
+  .badge.malicious{background:var(--malicious-bg); color:var(--malicious);}
+  .badge.benign{background:var(--benign-bg); color:var(--benign);}
+  .badge.needs_review{background:var(--review-bg); color:var(--review);}
+
+  .verdict-row{display:flex; align-items:center; gap:12px; margin:6px 0 12px;}
+  .confidence{font-size:13px; color:var(--muted);}
+  .confidence b{color:var(--text);}
+
+  .reasoning{
+    font-size:14px;
+    line-height:1.6;
+    color:#C7D0E6;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-left:3px solid var(--memory);
+    border-radius:6px;
+    padding:12px 14px;
+    margin-bottom:14px;
+  }
+
+  .section-label{
+    font-size:11.5px;
+    color:var(--muted);
+    margin:0 0 10px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .section-label .dot{width:6px;height:6px;border-radius:50%;background:var(--memory);}
+
+  .memory-item{
+    font-size:13px;
+    line-height:1.55;
+    color:#B9C4DE;
+    padding:10px 12px;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:6px;
+    margin-bottom:8px;
+  }
+  .no-memory{font-size:13px; color:var(--muted); font-style:italic;}
+
+  .resolve-box{border-top:1px solid var(--border); margin-top:16px; padding-top:16px;}
+  textarea{
+    width:100%;
+    background:var(--surface-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    color:var(--text);
+    font-family:inherit;
+    font-size:13.5px;
+    padding:10px 12px;
+    resize:vertical;
+    min-height:44px;
+    margin-bottom:10px;
+  }
+
+  .history-item{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:10px 4px;
+    border-bottom:1px solid var(--border);
+    font-size:13px;
+  }
+  .history-item:last-child{border-bottom:none;}
+  .history-item .who{color:var(--text);}
+  .history-item .when{color:var(--muted); font-size:11.5px;}
+
+  .trend{
+    display:flex; align-items:flex-end; gap:4px; height:70px; margin-top:8px;
+  }
+  .trend .bar{
+    flex:1;
+    background:var(--memory);
+    border-radius:3px 3px 0 0;
+    min-height:4px;
+    opacity:0.85;
+  }
+  .demo-loop{border-bottom:1px solid var(--border); padding:0 0 16px; margin-bottom:16px;}
+  .demo-loop-head{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  .demo-loop-title{font-size:13px; font-weight:600; margin:0;}
+  .demo-loop-copy{color:var(--muted); font-size:12.5px; line-height:1.5; margin:8px 0 12px;}
+  .demo-steps{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; margin:12px 0;}
+  .demo-step{border-top:2px solid var(--border); color:var(--muted); padding-top:7px; font-size:10.5px; line-height:1.35; transition:border-color .35s ease, color .35s ease;}
+  .demo-step.active{border-color:var(--memory); color:var(--text);}
+  .demo-step.complete{border-color:var(--benign); color:var(--text);}
+  .demo-result{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;}
+  .demo-result > div{background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:10px;}
+  .demo-result-label{color:var(--muted); font-size:10px; text-transform:uppercase;}
+  .demo-result-value{font-size:13px; margin-top:4px;}
+  .evidence-list{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:0 0 16px;}
+  .evidence-item{background:var(--surface-2); border-left:2px solid var(--memory); padding:9px 11px; min-width:0;}
+  .evidence-item b{display:block; font-size:12px; margin-bottom:3px;}
+  .evidence-item span{display:block; color:#B9C4DE; font-size:12px; line-height:1.45;}
+  .timeline{list-style:none; padding:0; margin:0 0 16px;}
+  .timeline li{display:grid; grid-template-columns:72px 1fr; gap:10px; padding:7px 0; border-bottom:1px solid var(--border);}
+  .timeline li:last-child{border-bottom:0;}
+  .timeline time{font-size:11px; color:var(--memory);}
+  .timeline strong{display:block; font-size:12px; margin-bottom:2px;}
+  .timeline span{display:block; color:var(--muted); font-size:12px; line-height:1.4;}
+  .reason-list{margin:0 0 14px; padding-left:18px; color:#B9C4DE; font-size:12.5px; line-height:1.55;}
+  .learned{background:var(--benign-bg); border:1px solid #1F4A40; border-radius:6px; padding:12px; margin-top:12px;}
+  .learned p{font-size:12.5px; line-height:1.5; margin:0; color:#C8E8DE;}
+  .feedback-flow{font-size:11px; color:var(--muted); margin:0 0 10px;}
+  .operation-status{font-size:11.5px; color:var(--muted); margin:8px 0 12px;}
+  .operation-status strong{color:var(--benign); font-weight:600;}
+  .operation-status.failed strong{color:var(--malicious);}
+  .case-list{display:grid; gap:8px; margin:0 0 14px;}
+  .case-card{background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:11px 12px;}
+  .case-card-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;}
+  .case-id{font-size:12px; font-weight:600; color:var(--memory);}
+  .case-fields{display:grid; grid-template-columns:1fr 1fr; gap:7px 12px;}
+  .case-field{min-width:0;}
+  .case-field dt{font-size:10px; text-transform:uppercase; color:var(--muted);}
+  .case-field dd{font-size:12px; line-height:1.4; margin:2px 0 0; overflow-wrap:anywhere;}
+  .case-card details{margin-top:9px; font-size:11px; color:var(--muted);}
+  .case-card summary{cursor:pointer;}
+  .case-card details p{line-height:1.5; color:#B9C4DE; overflow-wrap:anywhere;}
+  .journey{display:grid; gap:0;}
+  .journey-step{position:relative; padding:0 0 14px 22px; border-left:1px solid var(--border);}
+  .journey-step:last-child{border-left-color:transparent; padding-bottom:0;}
+  .journey-step:before{content:""; position:absolute; width:7px; height:7px; border-radius:50%; background:var(--border); left:-4px; top:4px;}
+  .journey-step.done:before{background:var(--benign);}
+  .journey-step.current:before{background:var(--memory);}
+  .journey-step strong{display:block; font-size:12px;}
+  .journey-step span{display:block; color:var(--muted); font-size:11.5px; line-height:1.4; margin-top:2px;}
+  .pattern-list{display:grid; gap:7px;}
+  .pattern-row{display:flex; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid var(--border); font-size:12px;}
+  .pattern-row:last-child{border-bottom:0;}
+  .pattern-count{color:var(--memory); white-space:nowrap;}
+  .pattern-detail{font-size:11px; color:var(--muted); line-height:1.4; margin:0 0 8px;}
+  @media(max-width:620px){
+    header{align-items:flex-start; gap:16px; padding:16px;}
+    .stats{gap:10px; flex-wrap:wrap; justify-content:flex-end;}
+    main{padding:16px;}
+    .cta-row{flex-wrap:wrap;}
+    .demo-loop-head{flex-wrap:wrap;}
+    .demo-loop-title{flex:1 1 100%;}
+    .demo-steps{display:flex; min-width:0; overflow-x:auto;}
+    .demo-step{flex:0 0 100px;}
+    .evidence-list{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="mark">AE</div>
+    <div>
+      <h1>Aegis</h1>
+      <p>Memory-Powered Incident Response Agent<br>Account Takeover Investigation &amp; Triage</p>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="n" id="statTotal">0</div><div class="l">Alerts triaged</div></div>
+    <div class="stat"><div class="n" id="statResolved">0</div><div class="l">Resolved</div></div>
+    <div class="stat"><div class="n" id="statConf">—</div><div class="l">Latest confidence</div></div>
+  </div>
+</header>
+
+<main>
+  <div>
+    <div class="card">
+      <div class="cta-row">
+        <button class="btn-primary" onclick="startLearningDemo()">Start before/after demo</button>
+        <button class="btn-ghost" onclick="generateAlert()">Generate one-off alert</button>
+        <button class="btn-ghost" onclick="refreshHistory()">Refresh history</button>
+      </div>
+
+      <section class="demo-loop" id="demoLoop" aria-live="polite"></section>
+
+      <div id="currentAlert">
+        <div class="empty">Start the before/after demo to see analyst feedback become Hindsight memory and inform a similar alert.</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <p class="section-label"><span class="dot"></span>Confidence trend this session</p>
+      <div class="trend" id="trend"></div>
+    </div>
+    <div class="card">
+      <p class="section-label"><span class="dot"></span>Learning journey</p>
+      <div class="journey" id="learningJourney"><div class="operation-status">Loading retained history from Hindsight…</div></div>
+    </div>
+    <div class="card">
+      <p class="section-label"><span class="dot"></span>Security patterns in Hindsight</p>
+      <div id="memoryPatterns"><div class="operation-status">Querying Hindsight Recall…</div></div>
+    </div>
+    <div class="card">
+      <p class="section-label"><span class="dot"></span>Alert history</p>
+      <div id="history"><div class="empty">No alerts generated yet.</div></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = "http://localhost:8001";
+let current = null;
+let sessionAlerts = [];
+let demoRunId = null;
+let demoStage = null;
+let demoResolution = null;
+let demoContext = null;
+let memoryPatternsData = null;
+const DEMO_STATE_KEY = "aegis-learning-demo-v1";
+
+async function startLearningDemo(){
+  localStorage.removeItem(DEMO_STATE_KEY);
+  demoRunId = null;
+  demoStage = "before";
+  demoResolution = null;
+  demoContext = null;
+  setLoading();
+  try{
+    const res = await fetch(`${API}/demo/start`, {method:"POST"});
+    if(!res.ok) throw new Error("Couldn't start the learning demo.");
+    const alert = await res.json();
+    demoRunId = alert.demo.run_id;
+    demoContext = {
+      run_id: demoRunId,
+      first_alert_id: alert.id,
+      first_alert: alert,
+      user: alert.user,
+      before_verdict: alert.triage.verdict,
+      before_confidence: alert.triage.confidence,
+      analyst_verdict: null,
+      resolution: null,
+      after_alert: null,
+    };
+    acceptAlert(alert);
+  }catch(e){
+    showRequestError(e);
+  }
+}
+
+async function generateAfterLearningDemo(){
+  if(!demoRunId || !demoContext || !demoResolution?.memory_stored) return;
+  setLoading();
+  try{
+    const res = await fetch(`${API}/demo/${demoRunId}/next`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        user: demoContext.user,
+        first_alert_id: demoContext.first_alert_id,
+        analyst_verdict: demoContext.analyst_verdict,
+        before_verdict: demoContext.before_verdict,
+        before_confidence: demoContext.before_confidence,
+      })
+    });
+    const payload = await res.json();
+    if(!res.ok) throw new Error(payload.detail || "Couldn't generate the follow-up alert.");
+    demoStage = "after";
+    acceptAlert(payload);
+  }catch(e){
+    showRequestError(e);
+  }
+}
+
+async function generateAlert(){
+  setLoading();
+  try{
+    const res = await fetch(`${API}/alerts/generate`, {method:"POST"});
+    if(!res.ok) throw new Error("Couldn't generate an alert.");
+    const alert = await res.json();
+    localStorage.removeItem(DEMO_STATE_KEY);
+    demoRunId = null;
+    demoStage = null;
+    demoResolution = null;
+    demoContext = null;
+    acceptAlert(alert);
+  }catch(e){
+    showRequestError(e);
+  }
+}
+
+function acceptAlert(alert){
+  current = alert;
+  sessionAlerts.unshift(alert);
+  renderAlert(alert);
+  renderHistory();
+  renderTrend();
+  updateStats();
+  if(alert.demo && demoContext){
+    if(alert.demo.stage === "before") demoContext.first_alert = alert;
+    if(alert.demo.stage === "after") demoContext.after_alert = alert;
+    persistDemoState();
+  }
+  renderDemoFlow();
+  renderLearningJourney();
+}
+
+function persistDemoState(){
+  if(!demoContext) return;
+  localStorage.setItem(DEMO_STATE_KEY, JSON.stringify({
+    run_id: demoRunId,
+    stage: demoStage,
+    context: demoContext,
+    resolution: demoResolution,
+  }));
+}
+
+function restoreDemoState(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(DEMO_STATE_KEY) || "null");
+    if(!saved || !saved.context) return false;
+    demoRunId = saved.run_id;
+    demoStage = saved.stage;
+    demoContext = saved.context;
+    demoResolution = saved.resolution;
+    current = demoStage === "after"
+      ? demoContext.after_alert
+      : (demoResolution ? null : demoContext.first_alert);
+    return true;
+  }catch(e){
+    localStorage.removeItem(DEMO_STATE_KEY);
+    return false;
+  }
+}
+
+function showRequestError(error){
+  document.getElementById("currentAlert").innerHTML =
+    `<div class="empty">${escapeHtml(error.message || `Couldn't reach the backend at ${API}.`)}</div>`;
+}
+
+function setLoading(){
+  document.getElementById("currentAlert").innerHTML = `<div class="empty">Recalling similar incidents and reasoning over this alert…</div>`;
+}
+
+function badgeClass(v){
+  if(v === "malicious") return "malicious";
+  if(v === "benign") return "benign";
+  return "needs_review";
+}
+
+function renderAlert(alert){
+  const t = alert.triage;
+  const memories = (t.recalled_incidents || []);
+  const reasons = (t.relevance_reasons || []);
+  const impact = t.memory_impact || {};
+  const recalledCases = impact.cases || [];
+  const evidence = (alert.evidence || []);
+  const timeline = (alert.timeline || []);
+  const recallStatus = impact.recall_status || "failed";
+  const recallMessage = recallStatus === "completed"
+    ? `Hindsight Recall retrieved ${impact.recalled_record_count} record(s), grouped into ${impact.case_count} case(s).`
+    : recallStatus === "empty"
+      ? "Hindsight Recall returned no prior records for this query."
+      : "Hindsight Recall failed; historical memory was not used for this assessment.";
+  const caseHtml = recalledCases.length
+    ? `<div class="case-list">${recalledCases.map(memoryCase => `
+        <article class="case-card">
+          <div class="case-card-head">
+            <span class="case-id mono">${escapeHtml(memoryCase.case_id)}</span>
+            <span class="badge ${badgeClass(memoryCase.verdict)}">${escapeHtml(memoryCase.verdict)}</span>
+          </div>
+          <div class="operation-status">${escapeHtml(memoryCase.identity_type || "Hindsight record")}</div>
+          <dl class="case-fields">
+            <div class="case-field"><dt>Previous action</dt><dd>${escapeHtml(memoryCase.previous_action)}</dd></div>
+            <div class="case-field"><dt>Outcome</dt><dd>${escapeHtml(memoryCase.outcome)}</dd></div>
+            <div class="case-field"><dt>Relevant signals</dt><dd>${escapeHtml((memoryCase.relevant_signals || []).join("; ") || "No textual signal match extracted")}</dd></div>
+            <div class="case-field"><dt>Hindsight records</dt><dd class="mono">${escapeHtml((memoryCase.record_ids || []).join(", "))}</dd></div>
+          </dl>
+          <details><summary>Full Hindsight memory text (${(memoryCase.memory_text || []).length} record(s))</summary>
+            ${(memoryCase.memory_text || []).map(text => `<p>${escapeHtml(text)}</p>`).join("")}
+          </details>
+        </article>
+      `).join("")}</div>`
+    : `<div class="no-memory">No related cases were returned by Hindsight Recall.</div>`;
+  const evidenceHtml = evidence.map(item => `
+    <div class="evidence-item"><b>${escapeHtml(item.label)}</b><span>${escapeHtml(item.detail)}</span></div>
+  `).join("");
+  const timelineHtml = timeline.map(item => `
+    <li><time class="mono">${escapeHtml(item.time)}Z</time><div><strong>${escapeHtml(item.event)}</strong><span>${escapeHtml(item.detail)}</span></div></li>
+  `).join("");
+  const reasonHtml = reasons.length
+    ? `<ul class="reason-list">${reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>`
+    : `<div class="no-memory">${memories.length ? "No specific relevance factors were returned." : "No relevant previous analyst decision was retrieved."}</div>`;
+  const demoLabel = alert.demo ? `<p class="section-label"><span class="dot"></span>${escapeHtml(alert.demo.label)}</p>` : "";
+
+  document.getElementById("currentAlert").innerHTML = `
+    ${demoLabel}
+    <div class="alert-head">
+      <div>
+        <div class="alert-id mono">ALERT #${alert.id} · ${new Date(alert.timestamp).toLocaleString()}</div>
+        <div class="alert-desc">${escapeHtml(alert.description)}</div>
+      </div>
+      <span class="badge ${badgeClass(t.verdict)}">${t.verdict.replace('_',' ')}</span>
+    </div>
+
+    <div class="alert-meta">
+      <span class="chip mono">${alert.user.email}</span>
+      <span class="chip mono">${alert.ip}</span>
+      <span class="chip">${alert.geo}</span>
+      <span class="chip">${alert.signature.replace('_',' ')}</span>
+    </div>
+
+    <div class="verdict-row">
+      <span class="confidence">Confidence: <b>${t.confidence}%</b></span>
+      <span class="confidence">Used memory: <b>${t.used_memory ? "yes" : "no"}</b></span>
+    </div>
+
+    <div class="reasoning">${escapeHtml(t.reasoning)}<br><br><b>Recommended:</b> ${escapeHtml(t.recommended_action)}</div>
+
+    <p class="section-label"><span class="dot"></span>Investigation evidence</p>
+    <div class="evidence-list">${evidenceHtml}</div>
+
+    <p class="section-label"><span class="dot"></span>Incident timeline</p>
+    <ol class="timeline">${timelineHtml}</ol>
+
+    <p class="section-label"><span class="dot"></span>Memory Impact · ${escapeHtml(String(impact.case_count || 0))} retained case(s), ${escapeHtml(String(impact.unlinked_record_count || 0))} unlinked record(s) · current verdict: ${escapeHtml(t.verdict)}</p>
+    <p class="operation-status ${recallStatus === "failed" ? "failed" : ""}">RECALL · <strong>${escapeHtml(recallStatus.toUpperCase())}</strong> · ${escapeHtml(recallMessage)}</p>
+    <p class="section-label">Why these cases matter</p>
+    ${reasonHtml}
+    ${caseHtml}
+
+    <div class="resolve-box">
+      <p class="section-label"><span class="dot"></span>Analyst Feedback</p>
+      <p class="feedback-flow">Analyst decision → Hindsight memory → Future triage</p>
+      <textarea id="notes" placeholder="Optional notes (e.g. 'user confirmed traveling')"></textarea>
+      <div class="cta-row" style="margin-bottom:0;">
+        <button class="btn-malicious" onclick="resolve('malicious')">Confirm: Malicious</button>
+        <button class="btn-benign" onclick="resolve('benign')">Confirm: False positive</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderDemoFlow(){
+  const el = document.getElementById("demoLoop");
+  const afterAlert = demoStage === "after" ? (current || demoContext?.after_alert) : null;
+  const memoryStored = Boolean(demoResolution && demoResolution.memory_stored);
+  const hasFirstAlert = Boolean(demoContext && demoContext.first_alert);
+  let activeStep = 0;
+  if(demoStage === "after"){
+    activeStep = 4;
+  }else if(memoryStored){
+    activeStep = 3;
+  }else if(demoResolution){
+    activeStep = 2;
+  }else if(demoStage === "before" && hasFirstAlert){
+    activeStep = 1;
+  }
+  const steps = ["Before feedback", "Analyst decision", "Hindsight memory", "Similar alert", "Compare" ];
+  const stepsHtml = steps.map((label, index) => {
+    const state = index < activeStep ? "complete" : (index === activeStep ? "active" : "");
+    return `<div class="demo-step ${state}">${index + 1}. ${label}</div>`;
+  }).join("");
+  let content = "Start a clean, two-alert run. Alert 1 uses an isolated Hindsight bank; the similar follow-up is available after analyst feedback is saved.";
+
+  if(demoStage === "before" && !demoResolution){
+    content = "Alert 1 is being assessed before any analyst decision exists in this demo bank. Review the evidence, then record your verdict.";
+  }else if(demoResolution){
+    content = demoResolution.memory_stored
+      ? "Analyst feedback was saved to Hindsight. The run can resume from this browser after a backend restart; generate the similar follow-up to check what Recall retrieves."
+      : "Hindsight did not confirm the memory write; the follow-up is disabled.";
+  }
+
+  let action = `<button class="btn-ghost" onclick="startLearningDemo()">Start before/after demo</button>`;
+  if(demoStage === "before" && demoResolution && demoResolution.demo_ready){
+    action = `<button class="btn-primary" onclick="generateAfterLearningDemo()">Generate similar alert after learning</button>`;
+  }else if(demoStage === "before" && demoResolution){
+    action = `<button class="btn-ghost" disabled>Memory write not confirmed</button>`;
+  }else if(demoStage === "after"){
+    action = `<button class="btn-ghost" onclick="startLearningDemo()">Run demo again</button>`;
+  }
+
+  let comparison = "";
+  if(afterAlert && afterAlert.demo){
+    const demo = afterAlert.demo;
+    const recalled = (afterAlert.triage.recalled_incidents || []).length;
+    comparison = `
+      <div class="demo-result">
+        <div><div class="demo-result-label">Before · no analyst memory</div><div class="demo-result-value">${escapeHtml(demo.before_verdict)} · ${escapeHtml(String(demo.before_confidence))}%</div></div>
+        <div><div class="demo-result-label">After · ${recalled} recalled case(s)</div><div class="demo-result-value">${escapeHtml(afterAlert.triage.verdict)} · ${escapeHtml(String(afterAlert.triage.confidence))}%</div></div>
+      </div>
+      <p class="demo-loop-copy">Analyst confirmed ${escapeHtml(demo.previous_case_id || `Alert #${demo.previous_alert_id}`)} as ${escapeHtml(demo.previous_analyst_verdict)}. Previous action: ${escapeHtml(demo.previous_action || "Not preserved in retained metadata.")} Outcome: ${escapeHtml(demo.previous_outcome || "Not preserved in retained metadata.")} ${demo.restart_recovery ? "The backend restarted; Hindsight Recall verified this retained case before continuing. " : ""}${recalled ? "Hindsight returned prior case memory for this assessment." : "Hindsight returned no prior case, so a memory effect is not claimed."}</p>
+    `;
+  }
+
+  el.innerHTML = `
+    <div class="demo-loop-head"><p class="demo-loop-title">Before / after memory demo</p>${action}</div>
+    <div class="demo-steps">${stepsHtml}</div>
+    <p class="demo-loop-copy">${content}</p>
+    ${comparison}
+  `;
+}
+
+function renderLearningJourney(){
+  const el = document.getElementById("learningJourney");
+  if(!el) return;
+  const afterAlert = current?.demo?.stage === "after" ? current : demoContext?.after_alert;
+  const retainConfirmed = Boolean(demoResolution?.retain_operation?.status === "confirmed" || demoResolution?.memory_stored);
+  const expectedCaseId = demoContext?.first_alert_id ? `INC-${demoContext.first_alert_id.toUpperCase()}` : null;
+  const afterCases = afterAlert?.triage?.memory_impact?.cases || [];
+  const priorCaseRecalled = Boolean(expectedCaseId && afterCases.some(memoryCase => memoryCase.case_id === expectedCaseId));
+  const patterns = memoryPatternsData;
+  const matchedPatterns = patterns?.patterns?.filter(pattern => pattern.case_count > 0) || [];
+  const patternSummary = !patterns
+    ? "Querying the stored Hindsight bank."
+    : patterns.status === "failed"
+      ? "Hindsight Recall failed; accumulated patterns are unavailable."
+      : `${patterns.unique_case_count} distinct case ID(s) found across ${matchedPatterns.length} matching pattern categories in Hindsight Recall.`;
+  const currentAlert = current;
+  const currentSummary = !currentAlert
+    ? "No current alert assessment."
+    : currentAlert.triage.used_memory
+      ? `${currentAlert.triage.verdict} · ${currentAlert.triage.confidence}% using ${currentAlert.triage.memory_impact.case_count} recalled case(s).`
+      : `${currentAlert.triage.verdict} · ${currentAlert.triage.confidence}%; no prior memory used.`;
+  const rows = [
+    {
+      label: "Alert 1 · analyst decision retained",
+      detail: retainConfirmed
+        ? `${demoResolution.retain_operation?.case_id || expectedCaseId} · ${demoResolution.analyst_verdict || demoContext.analyst_verdict} · Hindsight Retain confirmed.`
+        : "Awaiting analyst feedback and a confirmed Hindsight Retain.",
+      done: retainConfirmed,
+    },
+    {
+      label: "Alert 2 · previous decision recalled",
+      detail: afterAlert
+        ? priorCaseRecalled
+          ? `${expectedCaseId} returned by Hindsight for the follow-up assessment.`
+          : `${afterCases.length} case(s) returned; Alert 1's case ID was not among them.`
+        : "Available after Alert 1 feedback is retained; the server verifies Recall before generating it.",
+      done: priorCaseRecalled,
+    },
+    {
+      label: "Alert 3 · accumulated security history",
+      detail: patternSummary,
+      done: Boolean(patterns && patterns.status !== "failed" && patterns.unique_case_count > 0),
+    },
+    {
+      label: "Current alert · history informs verdict",
+      detail: currentSummary,
+      done: Boolean(currentAlert?.triage?.used_memory),
+    },
+  ];
+  el.innerHTML = rows.map((row, index) => `
+    <div class="journey-step ${row.done ? "done" : (index === 0 || rows[index - 1]?.done ? "current" : "")}">
+      <strong>${escapeHtml(row.label)}</strong><span>${escapeHtml(row.detail)}</span>
+    </div>
+  `).join("");
+}
+
+function renderMemoryPatterns(){
+  const el = document.getElementById("memoryPatterns");
+  if(!el) return;
+  if(!memoryPatternsData){
+    el.innerHTML = `<div class="operation-status">Querying Hindsight Recall…</div>`;
+    return;
+  }
+  if(memoryPatternsData.status === "failed"){
+    el.innerHTML = `<div class="operation-status failed">RECALL · <strong>FAILED</strong> · Hindsight pattern queries could not be completed.</div>`;
+    return;
+  }
+  const rows = memoryPatternsData.patterns.map(pattern => `
+    <details>
+      <summary class="pattern-row"><span>${escapeHtml(pattern.label)}</span><span class="pattern-count">${pattern.case_count} case(s) · ${pattern.unlinked_record_count || 0} unlinked record(s)</span></summary>
+      <p class="pattern-detail">${pattern.cases.length ? pattern.cases.map(memoryCase => `${escapeHtml(memoryCase.case_id)} · ${escapeHtml(memoryCase.verdict)}`).join("<br>") : "No matching returned memory records for this pattern."}</p>
+    </details>
+  `).join("");
+  el.innerHTML = `
+    <p class="operation-status">RECALL · <strong>${escapeHtml(memoryPatternsData.status.toUpperCase())}</strong> · ${memoryPatternsData.unique_case_count} distinct case ID(s) across ${memoryPatternsData.patterns.length} queried patterns.</p>
+    <div class="pattern-list">${rows}</div>
+  `;
+  renderLearningJourney();
+}
+
+async function loadMemoryPatterns(){
+  try{
+    const res = await fetch(`${API}/memory/patterns`);
+    if(!res.ok) throw new Error("Pattern Recall request failed.");
+    memoryPatternsData = await res.json();
+  }catch(e){
+    memoryPatternsData = {status:"failed", patterns:[], unique_case_count:0};
+  }
+  renderMemoryPatterns();
+}
+
+async function resolve(verdict){
+  if(!current) return;
+  const notes = document.getElementById("notes").value;
+  const resolvedAlert = current;
+  const action = verdict === "malicious"
+    ? "Password reset, session revocation, MFA re-enrollment enforced."
+    : "No action taken; alert marked as false positive.";
+
+  try{
+    const res = await fetch(`${API}/alerts/${resolvedAlert.id}/resolve`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({verdict, action, notes})
+    });
+    const result = await res.json();
+    if(!res.ok) throw new Error(result.detail || "Couldn't save analyst feedback.");
+
+    resolvedAlert.resolved = true;
+    resolvedAlert.resolution = {verdict, action, notes};
+    if(resolvedAlert.demo && resolvedAlert.demo.stage === "before"){
+      demoResolution = {...result, analyst_verdict: verdict};
+      if(demoContext){
+        demoContext.analyst_verdict = verdict;
+        demoContext.resolution = demoResolution;
+      }
+    }
+    persistDemoState();
+    const retainStatus = result.retain_operation?.status === "confirmed" ? "CONFIRMED" : "FAILED";
+    document.getElementById("currentAlert").innerHTML = `
+      <p class="section-label"><span class="dot"></span>Analyst decision recorded: ${escapeHtml(verdict)}</p>
+      <div class="learned">
+        <p class="section-label"><span class="dot"></span>What Aegis Learned</p>
+        <p>${escapeHtml(result.learning_summary || "The analyst feedback was recorded for future investigations.")}</p>
+        <p class="operation-status ${result.memory_stored ? "" : "failed"}">RETAIN · <strong>${retainStatus}</strong> · ${escapeHtml(result.retain_operation?.case_id || "No case ID returned")} · ${escapeHtml(String(result.retain_operation?.items_count || 0))} item(s)</p>
+        <p class="feedback-flow">${result.memory_stored ? "Hindsight Retain confirmed. Future Recall can retrieve this analyst decision." : "Hindsight Retain failed; future learning is not claimed."}</p>
+      </div>
+    `;
+    current = null;
+    updateStats();
+    renderDemoFlow();
+    renderLearningJourney();
+  }catch(e){
+    showRequestError(e);
+  }
+}
+
+function renderHistory(){
+  const el = document.getElementById("history");
+  if(sessionAlerts.length === 0){
+    el.innerHTML = `<div class="empty">No alerts generated yet.</div>`;
+    return;
+  }
+  el.innerHTML = sessionAlerts.slice(0,12).map(a => `
+    <div class="history-item">
+      <span class="who mono">${a.user.email.split('@')[0]}</span>
+      <span class="badge ${badgeClass(a.triage.verdict)}">${a.triage.verdict.replace('_',' ')}</span>
+      <span class="when mono">${a.triage.confidence}%</span>
+    </div>
+  `).join("");
+}
+
+function renderTrend(){
+  const el = document.getElementById("trend");
+  const points = sessionAlerts.slice(0,20).reverse();
+  if(points.length === 0){ el.innerHTML = ""; return; }
+  el.innerHTML = points.map(a => {
+    const h = Math.max(4, a.triage.confidence * 0.65);
+    return `<div class="bar" style="height:${h}px" title="${a.triage.confidence}%"></div>`;
+  }).join("");
+}
+
+function updateStats(){
+  document.getElementById("statTotal").innerText = sessionAlerts.length;
+  document.getElementById("statResolved").innerText = sessionAlerts.filter(a => a.resolved).length;
+  document.getElementById("statConf").innerText = sessionAlerts.length ? sessionAlerts[0].triage.confidence + "%" : "—";
+}
+
+async function refreshHistory(){
+  try{
+    const res = await fetch(`${API}/alerts`);
+    sessionAlerts = await res.json();
+    renderHistory();
+    renderTrend();
+    updateStats();
+    renderLearningJourney();
+  }catch(e){ /* backend not running yet */ }
+}
+
+function escapeHtml(s){
+  const d = document.createElement("div");
+  d.innerText = s;
+  return d.innerHTML;
+}
+
+const demoRestored = restoreDemoState();
+if(demoRestored && current){
+  renderAlert(current);
+}else if(demoRestored && demoResolution){
+  const retainStatus = demoResolution.retain_operation?.status === "confirmed" ? "CONFIRMED" : "FAILED";
+  document.getElementById("currentAlert").innerHTML = `
+    <p class="section-label"><span class="dot"></span>Alert 1 analyst decision: ${escapeHtml(demoResolution.analyst_verdict || demoContext.analyst_verdict || "recorded")}</p>
+    <div class="learned">
+      <p class="section-label"><span class="dot"></span>What Aegis Learned</p>
+      <p>${escapeHtml(demoResolution.learning_summary || "Analyst feedback was restored from this browser.")}</p>
+      <p class="operation-status ${demoResolution.memory_stored ? "" : "failed"}">RETAIN · <strong>${retainStatus}</strong> · ${escapeHtml(demoResolution.retain_operation?.case_id || "Case ID unavailable")}</p>
+    </div>
+  `;
+}else if(demoRestored && demoContext.first_alert){
+  renderAlert(demoContext.first_alert);
+}
+renderDemoFlow();
+renderLearningJourney();
+renderMemoryPatterns();
+refreshHistory();
+loadMemoryPatterns();
+</script>
+</body>
+</html>
